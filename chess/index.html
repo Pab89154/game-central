@@ -650,14 +650,15 @@
 
       function configureEngineAfterUci() {
         if (!engine) return;
-        // Smaller hash is safer on iPhone memory limits.
-        engine.postMessage("setoption name Hash value " + (isIOS() ? 8 : 16));
-        engine.postMessage("setoption name Threads value 1");
+        // Do not set Threads — this build locks Threads at 1 and setting it hangs the worker.
+        // Hash is also locked at 16; only Skill Level is safe to change.
         applyEngineDifficulty();
         engine.postMessage("isready");
       }
 
       function handleEngineLine(line) {
+        if (!line) return;
+        line = String(line).replace(/\r/g, "").trim();
         if (line === "uciok") {
           configureEngineAfterUci();
           return;
@@ -670,7 +671,7 @@
           return;
         }
         if (line.indexOf("bestmove ") === 0) {
-          var parts = line.split(" ");
+          var parts = line.split(/\s+/);
           var uci = parts[1];
           if (pendingAiCallback) {
             var cb = pendingAiCallback;
@@ -720,14 +721,14 @@
           }
         };
 
-        // If WASM never becomes ready on iOS, fall back to the asm.js engine.
+        // If WASM never becomes ready, fall back to the asm.js engine.
         if (allowFallback) {
           engineBootTimer = setTimeout(function () {
             if (engineReady || engineUsingAsm) return;
             engineUsingAsm = true;
             document.getElementById("status").textContent = "Retrying engine for this device…";
             startEngineWorker("stockfish.js", false);
-          }, isIOS() ? 6000 : 10000);
+          }, 12000);
         }
 
         try {
@@ -808,10 +809,8 @@
       function applyEngineDifficulty() {
         if (!engine) return;
         var d = getDifficulty();
+        // Only use Skill Level — extra skill options hang this Stockfish build.
         engine.postMessage("setoption name Skill Level value " + d.skill);
-        // Extra weakness knobs (ignored safely if this build doesn't support them).
-        engine.postMessage("setoption name Skill Level Maximum Error value " + (20 - d.skill) * 10);
-        engine.postMessage("setoption name Skill Level Probability value " + Math.max(1, 100 - d.skill * 4));
         updateDifficultyUI();
       }
 
