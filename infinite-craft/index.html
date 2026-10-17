@@ -135,9 +135,14 @@
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
       }
 
-      .chip.selected {
+      .chip.dragging {
+        z-index: 20;
         border-color: var(--neon-green);
-        box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.35);
+      }
+
+      .chip.drop-target {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.45);
       }
 
       .chip.fresh {
@@ -211,7 +216,7 @@
 
         <div class="game-panel craft-panel">
           <div class="craft-top">
-            <p class="status" id="status">Tap two elements, or drag one onto another.</p>
+            <p class="status" id="status">Drag one element on top of another.</p>
             <div class="discover-count" id="count">4 discovered</div>
           </div>
 
@@ -221,7 +226,7 @@
               <div class="side-list" id="sideList"></div>
             </aside>
             <div class="canvas" id="canvas" aria-label="Crafting board">
-              <p class="canvas-hint" id="canvasHint">Drag elements here and mix them.</p>
+              <p class="canvas-hint" id="canvasHint">Drag an element onto another, even the same one. Water + Water = Lake.</p>
             </div>
           </div>
 
@@ -460,7 +465,6 @@
       var discovered = STARTERS.slice();
       var chips = [];
       var nextId = 1;
-      var selectedId = null;
       var toastTimer = null;
 
       var canvas = document.getElementById("canvas");
@@ -536,7 +540,7 @@
         chips.forEach(function (chip) {
           var el = document.createElement("button");
           el.type = "button";
-          el.className = "chip" + (chip.id === selectedId ? " selected" : "") + (chip.fresh ? " fresh" : "");
+          el.className = "chip" + (chip.fresh ? " fresh" : "");
           el.textContent = emoji(chip.name) + " " + chip.name;
           el.style.left = chip.x + "px";
           el.style.top = chip.y + "px";
@@ -602,12 +606,23 @@
       }
 
       function chipUnder(clientX, clientY, ignoreId) {
+        var ignoreEl = elementFor(ignoreId);
+        if (ignoreEl) ignoreEl.style.pointerEvents = "none";
         var hit = document.elementFromPoint(clientX, clientY);
+        if (ignoreEl) ignoreEl.style.pointerEvents = "";
         var el = hit && hit.closest ? hit.closest(".chip") : null;
         if (!el) return null;
         var id = parseInt(el.dataset.id, 10);
-        if (id === ignoreId) return null;
+        if (!id || id === ignoreId) return null;
         return id;
+      }
+
+      function markDropTarget(id) {
+        var nodes = canvas.querySelectorAll(".chip");
+        for (var i = 0; i < nodes.length; i++) {
+          var nodeId = parseInt(nodes[i].dataset.id, 10);
+          nodes[i].classList.toggle("drop-target", nodeId === id);
+        }
       }
 
       function learn(name) {
@@ -631,7 +646,6 @@
         var result = recipe(a.name, b.name);
         if (!result) {
           statusEl.textContent = "Those don't mix yet. Try another pair.";
-          selectedId = null;
           renderCanvas();
           return;
         }
@@ -639,7 +653,6 @@
         var y = (a.y + b.y) / 2;
         removeChip(idA);
         removeChip(idB);
-        selectedId = null;
         var isNew = discovered.indexOf(result) === -1;
         learn(result);
         var rect = canvas.getBoundingClientRect();
@@ -653,24 +666,12 @@
         }
       }
 
-      function selectChip(id) {
-        if (selectedId && selectedId !== id) {
-          var other = selectedId;
-          selectedId = null;
-          combine(other, id);
-          return;
-        }
-        selectedId = selectedId === id ? null : id;
-        statusEl.textContent = selectedId
-          ? "Now tap another element to mix."
-          : "Tap two elements, or drag one onto another.";
-        renderCanvas();
-      }
-
       function startChipDrag(e, id) {
         e.preventDefault();
         var chip = chipById(id);
-        if (!chip) return;
+        var el = elementFor(id);
+        if (!chip || !el) return;
+        el.classList.add("dragging");
         var drag = {
           id: id,
           pointerId: e.pointerId,
@@ -682,25 +683,25 @@
         };
         function move(ev) {
           if (ev.pointerId !== drag.pointerId) return;
+          ev.preventDefault();
           var dx = ev.clientX - drag.startX;
           var dy = ev.clientY - drag.startY;
-          if (Math.abs(dx) + Math.abs(dy) > 8) drag.moved = true;
+          if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
           chip.x = drag.origX + dx;
           chip.y = drag.origY + dy;
           clamp(chip);
           moveElement(id);
+          markDropTarget(drag.moved ? chipUnder(ev.clientX, ev.clientY, id) : null);
         }
         function up(ev) {
           if (ev.pointerId !== drag.pointerId) return;
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", up);
           window.removeEventListener("pointercancel", up);
-          if (drag.moved) {
-            var hit = chipUnder(ev.clientX, ev.clientY, id);
-            if (hit) combine(id, hit);
-          } else {
-            selectChip(id);
-          }
+          markDropTarget(null);
+          if (!drag.moved) return;
+          var hit = chipUnder(ev.clientX, ev.clientY, id);
+          if (hit) combine(id, hit);
         }
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
@@ -718,7 +719,11 @@
         function move(ev) {
           if (ev.pointerId !== pointerId) return;
           if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 8) moved = true;
-          if (moved && spawned == null) spawned = spawn(name, ev.clientX, ev.clientY, false);
+          if (moved && spawned == null) {
+            spawned = spawn(name, ev.clientX, ev.clientY, false);
+            var spawnedEl = elementFor(spawned);
+            if (spawnedEl) spawnedEl.classList.add("dragging");
+          }
           if (spawned != null) {
             var chip = chipById(spawned);
             var rect = canvas.getBoundingClientRect();
@@ -726,6 +731,7 @@
             chip.y = ev.clientY - rect.top - 18;
             clamp(chip);
             moveElement(spawned);
+            markDropTarget(chipUnder(ev.clientX, ev.clientY, spawned));
           }
         }
         function up(ev) {
@@ -733,9 +739,10 @@
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", up);
           window.removeEventListener("pointercancel", up);
+          markDropTarget(null);
           if (!moved) {
             spawn(name, null, null, false);
-            statusEl.textContent = "Now mix " + name + " with something else.";
+            statusEl.textContent = "Drag " + name + " onto another element.";
             return;
           }
           if (spawned != null) {
@@ -751,7 +758,6 @@
       searchEl.addEventListener("input", renderSidebar);
       document.getElementById("clearBtn").addEventListener("click", function () {
         chips = [];
-        selectedId = null;
         statusEl.textContent = "Board cleared. Your discoveries are still saved.";
         renderCanvas();
       });
@@ -759,7 +765,6 @@
         if (!confirm("Erase all discoveries and start over?")) return;
         discovered = STARTERS.slice();
         chips = [];
-        selectedId = null;
         save();
         updateCount();
         renderSidebar();
