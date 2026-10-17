@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Infinite Craft — Game Central</title>
+    <link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+    <link rel="stylesheet" href="../shared.css" />
+    <style>
+      .craft-panel {
+        width: min(100%, 920px);
+        align-items: stretch;
+      }
+
+      .craft-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .discover-count {
+        font-weight: 800;
+        color: var(--neon-green);
+      }
+
+      .craft-layout {
+        display: grid;
+        grid-template-columns: 230px 1fr;
+        gap: 0.75rem;
+        width: 100%;
+        min-height: 460px;
+      }
+
+      .sidebar {
+        background: var(--surface-hover);
+        border: 2px solid var(--neon-purple);
+        border-radius: var(--radius);
+        padding: 0.7rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-height: 0;
+      }
+
+      .search {
+        width: 100%;
+        border-radius: 999px;
+        border: 2px solid var(--ocean);
+        background: var(--panel-dark);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.95rem;
+        padding: 0.45rem 0.8rem;
+      }
+
+      .search:focus {
+        outline: none;
+        border-color: var(--neon-green);
+      }
+
+      .side-list {
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        max-height: 520px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .side-item,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border-radius: 999px;
+        border: 2px solid var(--ocean);
+        background: #12182b;
+        color: var(--text);
+        font-weight: 700;
+        font-family: inherit;
+        font-size: 0.95rem;
+        padding: 0.4rem 0.75rem;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        touch-action: none;
+      }
+
+      .side-item {
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .side-item:active,
+      .chip:active {
+        cursor: grabbing;
+      }
+
+      .canvas {
+        position: relative;
+        min-height: 460px;
+        border-radius: var(--radius);
+        border: 2px dashed rgba(0, 217, 255, 0.45);
+        background:
+          radial-gradient(circle at 20% 20%, rgba(0, 217, 255, 0.08), transparent 40%),
+          radial-gradient(circle at 80% 80%, rgba(138, 43, 226, 0.12), transparent 42%),
+          #0d1220;
+        overflow: hidden;
+        touch-action: none;
+      }
+
+      .canvas-hint {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--text-muted);
+        padding: 1rem;
+        pointer-events: none;
+      }
+
+      .chip {
+        position: absolute;
+        z-index: 2;
+        white-space: nowrap;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      }
+
+      .chip.selected {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.35);
+      }
+
+      .chip.fresh {
+        animation: pop 0.35s ease;
+      }
+
+      @keyframes pop {
+        from { transform: scale(0.6); }
+        to { transform: scale(1); }
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 1.25rem;
+        transform: translateX(-50%) translateY(120%);
+        background: #151b2e;
+        border: 2px solid var(--neon-green);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 0.55rem 1rem;
+        font-weight: 800;
+        z-index: 80;
+        transition: transform 0.25s ease;
+        pointer-events: none;
+      }
+
+      .toast.show {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .craft-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      @media (max-width: 720px) {
+        .craft-layout {
+          grid-template-columns: 1fr;
+          min-height: 0;
+        }
+
+        .side-list {
+          max-height: 148px;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-content: flex-start;
+        }
+
+        .side-item {
+          width: auto;
+        }
+
+        .canvas {
+          min-height: 360px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <main class="main">
+        <a class="back-link" href="../index.html">← Back to Arcade</a>
+        <header class="header">
+          <div class="game-card-icon" aria-hidden="true">🧪</div>
+          <h1>Infinite Craft</h1>
+          <p class="tagline">Mix elements to discover new things!</p>
+        </header>
+
+        <div class="game-panel craft-panel">
+          <div class="craft-top">
+            <p class="status" id="status">Tap two elements, or drag one onto another.</p>
+            <div class="discover-count" id="count">4 discovered</div>
+          </div>
+
+          <div class="craft-layout">
+            <aside class="sidebar">
+              <input class="search" id="search" type="search" placeholder="Search discoveries" aria-label="Search discoveries" />
+              <div class="side-list" id="sideList"></div>
+            </aside>
+            <div class="canvas" id="canvas" aria-label="Crafting board">
+              <p class="canvas-hint" id="canvasHint">Drag elements here and mix them.</p>
+            </div>
+          </div>
+
+          <div class="craft-actions">
+            <button class="btn btn-secondary" type="button" id="clearBtn">Clear board</button>
+            <button class="btn btn-secondary" type="button" id="resetBtn">Reset discoveries</button>
+          </div>
+          <p class="hint">Start with Water, Fire, Wind, and Earth. New mixes are saved on this device.</p>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+      var STARTERS = ["Water", "Fire", "Wind", "Earth"];
+      var EMOJI = {
+        Water: "💧", Fire: "🔥", Wind: "💨", Earth: "🌍",
+        Steam: "♨️", Plant: "🌱", Wave: "🌊", Lava: "🌋", Smoke: "💨", Dust: "🟤",
+        Lake: "🏞️", Blaze: "🔥", Mountain: "⛰️", Tornado: "🌪️", Cloud: "☁️", Fog: "🌫️",
+        Mud: "🟫", Engine: "⚙️", Algae: "🟢", Tree: "🌳", Ash: "⚫", Seed: "🌰",
+        Stone: "🪨", Volcano: "🌋", Magma: "🟠", Sandstorm: "🏜️", Sand: "🏖️", Storm: "⛈️",
+        Sea: "🐳", Swamp: "🐊", River: "🛶", Hurricane: "🌀", Wildfire: "🚒", Rain: "🌧️",
+        Lightning: "⚡", Sky: "🌌", Flower: "🌸", Forest: "🌲", Campfire: "🏕️", Fruit: "🍎",
+        Leaf: "🍃", Metal: "🔩", Brick: "🧱", Clay: "🏺", Glass: "🪟", Beach: "🏝️",
+        Desert: "🌵", Dune: "🏜️", Island: "🏝️", Salt: "🧂", Canyon: "🏞️", Garden: "🌷",
+        Perfume: "💐", Electricity: "🔌", Thunder: "🔊", Robot: "🤖", Wall: "🧱", House: "🏠",
+        Energy: "✨", Life: "🧬", Human: "🧑", Fish: "🐟", Bird: "🐦", Dragon: "🐉",
+        Family: "👨‍👩‍👧", Home: "🏡", Cook: "🍳", Farmer: "🧑‍🌾", Tool: "🔧", Knight: "🛡️",
+        Chef: "👨‍🍳", Farm: "🚜", Wood: "🪵", Boat: "⛵", Hammer: "🔨", Duck: "🦆",
+        Phoenix: "🔥", Egg: "🥚", Dinosaur: "🦕", Legend: "🏆", Hero: "🦸", Hourglass: "⏳",
+        Time: "⏰", Sun: "☀️", Moon: "🌙", Eclipse: "🌑", Rainbow: "🌈", Night: "🌃",
+        Star: "⭐", Space: "🌠", Planet: "🪐", Astronaut: "🧑‍🚀", Rocket: "🚀", Alien: "👽",
+        Cyborg: "🤖", Computer: "💻", Gamer: "🎮", Internet: "🌐", Phone: "📱", Wheat: "🌾",
+        Flour: "🥣", Dough: "🥖", Bread: "🍞", Toast: "🍞", Cow: "🐄", Milk: "🥛",
+        Cheese: "🧀", Sandwich: "🥪", Pizza: "🍕", Party: "🎉", Juice: "🧃", Pie: "🥧",
+        Ship: "🚢", Sailboat: "⛵", Wheel: "🛞", Car: "🚗", Airplane: "✈️", City: "🏙️",
+        Crowd: "👥", Traffic: "🚦", Ore: "⛏️", Gold: "🥇", Pressure: "💨", Fossil: "🦴",
+        Coal: "⚫", Diamond: "💎", Rich: "💰", King: "👑", Castle: "🏰", Kingdom: "🏰",
+        Wizard: "🧙", Potion: "🧪", Magic: "🪄", Ghost: "👻", Zombie: "🧟", Vampire: "🧛",
+        Paper: "📄", Pencil: "✏️", Book: "📖", School: "🏫", Student: "🧑‍🎓", Song: "🎵",
+        Singer: "🎤", Camera: "📷", Art: "🎨", Artist: "🧑‍🎨", Game: "🕹️", App: "📲",
+        Cold: "🥶", Ice: "🧊", Snow: "❄️", Snowman: "⛄", Glacier: "🧊", Potato: "🥔",
+        Fries: "🍟", Snack: "🍿", Sword: "⚔️", Rust: "🟤", Sleep: "😴", Dream: "💭",
+        Day: "🌞", Galaxy: "🌌", Thunderstorm: "⛈️"
+      };
+
+      var RECIPES = {};
+      function add(a, b, result) {
+        var key = [a, b].sort().join("|");
+        RECIPES[key] = result;
+      }
+
+      add("Water", "Fire", "Steam");
+      add("Water", "Earth", "Plant");
+      add("Water", "Wind", "Wave");
+      add("Fire", "Earth", "Lava");
+      add("Fire", "Wind", "Smoke");
+      add("Earth", "Wind", "Dust");
+      add("Water", "Water", "Lake");
+      add("Fire", "Fire", "Blaze");
+      add("Earth", "Earth", "Mountain");
+      add("Wind", "Wind", "Tornado");
+      add("Steam", "Wind", "Cloud");
+      add("Steam", "Water", "Fog");
+      add("Steam", "Earth", "Mud");
+      add("Steam", "Fire", "Engine");
+      add("Plant", "Water", "Algae");
+      add("Plant", "Earth", "Tree");
+      add("Plant", "Fire", "Ash");
+      add("Plant", "Wind", "Seed");
+      add("Lava", "Water", "Stone");
+      add("Lava", "Earth", "Volcano");
+      add("Lava", "Wind", "Ash");
+      add("Lava", "Fire", "Magma");
+      add("Smoke", "Water", "Fog");
+      add("Smoke", "Earth", "Dust");
+      add("Dust", "Water", "Mud");
+      add("Dust", "Fire", "Ash");
+      add("Dust", "Wind", "Sandstorm");
+      add("Wave", "Earth", "Sand");
+      add("Wave", "Wind", "Storm");
+      add("Wave", "Water", "Sea");
+      add("Lake", "Water", "Sea");
+      add("Lake", "Earth", "Swamp");
+      add("Mountain", "Water", "River");
+      add("Mountain", "Fire", "Volcano");
+      add("Tornado", "Water", "Hurricane");
+      add("Tornado", "Fire", "Wildfire");
+      add("Tornado", "Earth", "Sandstorm");
+      add("Cloud", "Water", "Rain");
+      add("Cloud", "Fire", "Lightning");
+      add("Cloud", "Wind", "Sky");
+      add("Rain", "Plant", "Flower");
+      add("Rain", "Fire", "Steam");
+      add("Rain", "Wind", "Storm");
+      add("Tree", "Tree", "Forest");
+      add("Tree", "Fire", "Campfire");
+      add("Tree", "Water", "Fruit");
+      add("Tree", "Earth", "Forest");
+      add("Tree", "Wind", "Leaf");
+      add("Stone", "Water", "Sand");
+      add("Stone", "Fire", "Metal");
+      add("Mud", "Fire", "Brick");
+      add("Mud", "Water", "Clay");
+      add("Mud", "Plant", "Swamp");
+      add("Sand", "Fire", "Glass");
+      add("Sand", "Water", "Beach");
+      add("Sand", "Earth", "Desert");
+      add("Sand", "Wind", "Dune");
+      add("Sea", "Earth", "Island");
+      add("Sea", "Fire", "Salt");
+      add("River", "River", "Lake");
+      add("River", "Earth", "Canyon");
+      add("Flower", "Flower", "Garden");
+      add("Flower", "Water", "Perfume");
+      add("Flower", "Earth", "Garden");
+      add("Forest", "Fire", "Wildfire");
+      add("Lightning", "Water", "Electricity");
+      add("Lightning", "Metal", "Electricity");
+      add("Lightning", "Cloud", "Thunder");
+      add("Lightning", "Fire", "Energy");
+      add("Electricity", "Metal", "Robot");
+      add("Brick", "Brick", "Wall");
+      add("Wall", "Wall", "House");
+      add("Swamp", "Energy", "Life");
+      add("Clay", "Life", "Human");
+      add("Life", "Earth", "Human");
+      add("Life", "Water", "Fish");
+      add("Life", "Wind", "Bird");
+      add("Life", "Fire", "Dragon");
+      add("Human", "Human", "Family");
+      add("Human", "House", "Home");
+      add("Human", "Fire", "Cook");
+      add("Human", "Plant", "Farmer");
+      add("Human", "Metal", "Tool");
+      add("Cook", "Fire", "Chef");
+      add("Farmer", "Plant", "Wheat");
+      add("Farmer", "Earth", "Farm");
+      add("Tool", "Tree", "Wood");
+      add("Leaf", "Tool", "Paper");
+      add("Wood", "Water", "Boat");
+      add("Wood", "Metal", "Hammer");
+      add("Bird", "Bird", "Egg");
+      add("Bird", "Water", "Duck");
+      add("Bird", "Fire", "Phoenix");
+      add("Egg", "Earth", "Dinosaur");
+      add("Egg", "Fire", "Phoenix");
+      add("Dinosaur", "Fire", "Dragon");
+      add("Human", "Sword", "Knight");
+      add("Knight", "Dragon", "Hero");
+      add("Hero", "Dragon", "Legend");
+      add("Metal", "Fire", "Sword");
+      add("Metal", "Water", "Rust");
+      add("Metal", "Earth", "Ore");
+      add("Glass", "Sand", "Hourglass");
+      add("Hourglass", "Sand", "Time");
+      add("Sky", "Fire", "Sun");
+      add("Sky", "Stone", "Moon");
+      add("Sun", "Moon", "Eclipse");
+      add("Rain", "Sun", "Rainbow");
+      add("Sky", "Sun", "Day");
+      add("Moon", "Sky", "Night");
+      add("Night", "Fire", "Star");
+      add("Night", "Human", "Sleep");
+      add("Sleep", "Human", "Dream");
+      add("Star", "Star", "Galaxy");
+      add("Star", "Sky", "Space");
+      add("Space", "Earth", "Planet");
+      add("Space", "Human", "Astronaut");
+      add("Space", "Fire", "Rocket");
+      add("Space", "Life", "Alien");
+      add("Planet", "Life", "Alien");
+      add("Robot", "Human", "Cyborg");
+      add("Robot", "Electricity", "Computer");
+      add("Computer", "Human", "Gamer");
+      add("Computer", "Electricity", "Internet");
+      add("Internet", "Human", "Phone");
+      add("Gamer", "Computer", "Game");
+      add("Phone", "Game", "App");
+      add("Wheat", "Stone", "Flour");
+      add("Flour", "Water", "Dough");
+      add("Dough", "Fire", "Bread");
+      add("Bread", "Fire", "Toast");
+      add("Farm", "Life", "Cow");
+      add("Cow", "Water", "Milk");
+      add("Milk", "Fire", "Cheese");
+      add("Cheese", "Bread", "Sandwich");
+      add("Cheese", "Dough", "Pizza");
+      add("Pizza", "Gamer", "Party");
+      add("Fruit", "Water", "Juice");
+      add("Fruit", "Fire", "Pie");
+      add("Boat", "Sea", "Ship");
+      add("Boat", "Wind", "Sailboat");
+      add("Wood", "Stone", "Wheel");
+      add("Engine", "Wheel", "Car");
+      add("Bird", "Metal", "Airplane");
+      add("House", "House", "City");
+      add("City", "Human", "Crowd");
+      add("City", "Car", "Traffic");
+      add("Ore", "Fire", "Gold");
+      add("Mountain", "Stone", "Pressure");
+      add("Earth", "Time", "Fossil");
+      add("Fossil", "Time", "Coal");
+      add("Coal", "Pressure", "Diamond");
+      add("Diamond", "Human", "Rich");
+      add("Gold", "Human", "King");
+      add("House", "King", "Castle");
+      add("Castle", "Knight", "Kingdom");
+      add("Star", "Human", "Wizard");
+      add("Wizard", "Water", "Potion");
+      add("Potion", "Life", "Magic");
+      add("Human", "Time", "Ghost");
+      add("Ghost", "Human", "Zombie");
+      add("Ghost", "Night", "Vampire");
+      add("Wood", "Coal", "Pencil");
+      add("Paper", "Pencil", "Book");
+      add("Book", "House", "School");
+      add("School", "Human", "Student");
+      add("Human", "Bird", "Song");
+      add("Song", "Human", "Singer");
+      add("Sun", "Glass", "Camera");
+      add("Rainbow", "Paper", "Art");
+      add("Art", "Human", "Artist");
+      add("Wind", "Mountain", "Cold");
+      add("Cold", "Water", "Ice");
+      add("Ice", "Rain", "Snow");
+      add("Snow", "Human", "Snowman");
+      add("Snow", "Mountain", "Glacier");
+      add("Farm", "Earth", "Potato");
+      add("Potato", "Fire", "Fries");
+      add("Fries", "Salt", "Snack");
+      add("Blaze", "Forest", "Wildfire");
+      add("Lightning", "Rain", "Thunderstorm");
+
+      var STORAGE_KEY = "gamecentral-infinite-craft";
+      var discovered = STARTERS.slice();
+      var chips = [];
+      var nextId = 1;
+      var selectedId = null;
+      var toastTimer = null;
+
+      var canvas = document.getElementById("canvas");
+      var sideList = document.getElementById("sideList");
+      var searchEl = document.getElementById("search");
+      var statusEl = document.getElementById("status");
+      var countEl = document.getElementById("count");
+      var hintEl = document.getElementById("canvasHint");
+      var toastEl = document.getElementById("toast");
+
+      function emoji(name) {
+        return EMOJI[name] || "✨";
+      }
+
+      function recipe(a, b) {
+        return RECIPES[[a, b].sort().join("|")] || null;
+      }
+
+      function load() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          var data = JSON.parse(raw);
+          if (data && data.discovered && data.discovered.length) {
+            discovered = STARTERS.slice();
+            data.discovered.forEach(function (name) {
+              if (discovered.indexOf(name) === -1 && EMOJI[name]) discovered.push(name);
+            });
+          }
+        } catch (err) {}
+      }
+
+      function save() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ discovered: discovered }));
+        } catch (err) {}
+      }
+
+      function updateCount() {
+        countEl.textContent = discovered.length + " discovered";
+      }
+
+      function showToast(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toastEl.classList.remove("show");
+        }, 1600);
+      }
+
+      function renderSidebar() {
+        var q = searchEl.value.trim().toLowerCase();
+        sideList.innerHTML = "";
+        discovered.forEach(function (name) {
+          if (q && name.toLowerCase().indexOf(q) === -1) return;
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "side-item";
+          btn.textContent = emoji(name) + " " + name;
+          btn.addEventListener("pointerdown", function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            startSidebarDrag(e, name);
+          });
+          sideList.appendChild(btn);
+        });
+      }
+
+      function renderCanvas() {
+        var nodes = canvas.querySelectorAll(".chip");
+        for (var i = 0; i < nodes.length; i++) nodes[i].remove();
+        hintEl.style.display = chips.length ? "none" : "flex";
+        chips.forEach(function (chip) {
+          var el = document.createElement("button");
+          el.type = "button";
+          el.className = "chip" + (chip.id === selectedId ? " selected" : "") + (chip.fresh ? " fresh" : "");
+          el.textContent = emoji(chip.name) + " " + chip.name;
+          el.style.left = chip.x + "px";
+          el.style.top = chip.y + "px";
+          el.dataset.id = String(chip.id);
+          el.addEventListener("pointerdown", function (e) {
+            if (e.button !== undefined && e.button !== 0) return;
+            startChipDrag(e, chip.id);
+          });
+          canvas.appendChild(el);
+          chip.fresh = false;
+        });
+      }
+
+      function spawn(name, clientX, clientY, fresh) {
+        var rect = canvas.getBoundingClientRect();
+        var chip = {
+          id: nextId++,
+          name: name,
+          x: 0,
+          y: 0,
+          fresh: !!fresh
+        };
+        if (clientX == null) {
+          chip.x = rect.width / 2 - 50 + (Math.random() * 80 - 40);
+          chip.y = rect.height / 2 - 18 + (Math.random() * 80 - 40);
+        } else {
+          chip.x = clientX - rect.left - 46;
+          chip.y = clientY - rect.top - 18;
+        }
+        clamp(chip);
+        chips.push(chip);
+        renderCanvas();
+        return chip.id;
+      }
+
+      function clamp(chip) {
+        var rect = canvas.getBoundingClientRect();
+        var maxX = Math.max(8, rect.width - 120);
+        var maxY = Math.max(8, rect.height - 44);
+        chip.x = Math.max(8, Math.min(maxX, chip.x));
+        chip.y = Math.max(8, Math.min(maxY, chip.y));
+      }
+
+      function chipById(id) {
+        for (var i = 0; i < chips.length; i++) if (chips[i].id === id) return chips[i];
+        return null;
+      }
+
+      function removeChip(id) {
+        chips = chips.filter(function (c) { return c.id !== id; });
+      }
+
+      function elementFor(id) {
+        return canvas.querySelector('.chip[data-id="' + id + '"]');
+      }
+
+      function moveElement(id) {
+        var chip = chipById(id);
+        var el = elementFor(id);
+        if (!chip || !el) return;
+        el.style.left = chip.x + "px";
+        el.style.top = chip.y + "px";
+      }
+
+      function chipUnder(clientX, clientY, ignoreId) {
+        var hit = document.elementFromPoint(clientX, clientY);
+        var el = hit && hit.closest ? hit.closest(".chip") : null;
+        if (!el) return null;
+        var id = parseInt(el.dataset.id, 10);
+        if (id === ignoreId) return null;
+        return id;
+      }
+
+      function learn(name) {
+        if (discovered.indexOf(name) !== -1) {
+          statusEl.textContent = name;
+          return false;
+        }
+        discovered.push(name);
+        save();
+        updateCount();
+        renderSidebar();
+        statusEl.textContent = "New! " + name;
+        showToast("New! " + emoji(name) + " " + name);
+        return true;
+      }
+
+      function combine(idA, idB) {
+        var a = chipById(idA);
+        var b = chipById(idB);
+        if (!a || !b) return;
+        var result = recipe(a.name, b.name);
+        if (!result) {
+          statusEl.textContent = "Those don't mix yet. Try another pair.";
+          selectedId = null;
+          renderCanvas();
+          return;
+        }
+        var x = (a.x + b.x) / 2;
+        var y = (a.y + b.y) / 2;
+        removeChip(idA);
+        removeChip(idB);
+        selectedId = null;
+        var isNew = discovered.indexOf(result) === -1;
+        learn(result);
+        var rect = canvas.getBoundingClientRect();
+        var id = spawn(result, rect.left + x + 46, rect.top + y + 18, isNew);
+        var chip = chipById(id);
+        if (chip) {
+          chip.x = x;
+          chip.y = y;
+          clamp(chip);
+          renderCanvas();
+        }
+      }
+
+      function selectChip(id) {
+        if (selectedId && selectedId !== id) {
+          var other = selectedId;
+          selectedId = null;
+          combine(other, id);
+          return;
+        }
+        selectedId = selectedId === id ? null : id;
+        statusEl.textContent = selectedId
+          ? "Now tap another element to mix."
+          : "Tap two elements, or drag one onto another.";
+        renderCanvas();
+      }
+
+      function startChipDrag(e, id) {
+        e.preventDefault();
+        var chip = chipById(id);
+        if (!chip) return;
+        var drag = {
+          id: id,
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: chip.x,
+          origY: chip.y,
+          moved: false
+        };
+        function move(ev) {
+          if (ev.pointerId !== drag.pointerId) return;
+          var dx = ev.clientX - drag.startX;
+          var dy = ev.clientY - drag.startY;
+          if (Math.abs(dx) + Math.abs(dy) > 8) drag.moved = true;
+          chip.x = drag.origX + dx;
+          chip.y = drag.origY + dy;
+          clamp(chip);
+          moveElement(id);
+        }
+        function up(ev) {
+          if (ev.pointerId !== drag.pointerId) return;
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", up);
+          if (drag.moved) {
+            var hit = chipUnder(ev.clientX, ev.clientY, id);
+            if (hit) combine(id, hit);
+          } else {
+            selectChip(id);
+          }
+        }
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+      }
+
+      function startSidebarDrag(e, name) {
+        if (e.target && e.target.closest && e.target.closest("input")) return;
+        e.preventDefault();
+        var startX = e.clientX;
+        var startY = e.clientY;
+        var pointerId = e.pointerId;
+        var spawned = null;
+        var moved = false;
+        function move(ev) {
+          if (ev.pointerId !== pointerId) return;
+          if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 8) moved = true;
+          if (moved && spawned == null) spawned = spawn(name, ev.clientX, ev.clientY, false);
+          if (spawned != null) {
+            var chip = chipById(spawned);
+            var rect = canvas.getBoundingClientRect();
+            chip.x = ev.clientX - rect.left - 46;
+            chip.y = ev.clientY - rect.top - 18;
+            clamp(chip);
+            moveElement(spawned);
+          }
+        }
+        function up(ev) {
+          if (ev.pointerId !== pointerId) return;
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", up);
+          if (!moved) {
+            spawn(name, null, null, false);
+            statusEl.textContent = "Now mix " + name + " with something else.";
+            return;
+          }
+          if (spawned != null) {
+            var hit = chipUnder(ev.clientX, ev.clientY, spawned);
+            if (hit) combine(spawned, hit);
+          }
+        }
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+      }
+
+      searchEl.addEventListener("input", renderSidebar);
+      document.getElementById("clearBtn").addEventListener("click", function () {
+        chips = [];
+        selectedId = null;
+        statusEl.textContent = "Board cleared. Your discoveries are still saved.";
+        renderCanvas();
+      });
+      document.getElementById("resetBtn").addEventListener("click", function () {
+        if (!confirm("Erase all discoveries and start over?")) return;
+        discovered = STARTERS.slice();
+        chips = [];
+        selectedId = null;
+        save();
+        updateCount();
+        renderSidebar();
+        renderCanvas();
+        statusEl.textContent = "Back to the four elements.";
+      });
+
+      load();
+      updateCount();
+      renderSidebar();
+      renderCanvas();
+    </script>
+    <script src="../shared.js"></script>
+  </body>
+</html>
