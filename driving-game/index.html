@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Driving Game — Game Central</title>
+    <link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+    <link rel="stylesheet" href="../shared.css" />
+    <style>
+      .main { max-width: 560px; }
+      canvas {
+        border: 3px solid #2c2421;
+        border-radius: var(--radius);
+        background: #35c93a;
+        display: block;
+        width: min(100%, 420px);
+        height: auto;
+        margin: 0 auto;
+        touch-action: none;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      }
+      .hud {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+      .hud span { color: var(--neon-blue); }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+        width: min(100%, 420px);
+      }
+      .controls button {
+        padding: 0.7rem 0.25rem;
+        border: 2px solid var(--neon-blue);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1.25rem;
+        font-weight: 800;
+        cursor: pointer;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .controls button:active { background: var(--surface-hover); }
+      .hint { font-size: 0.85rem; color: var(--text-muted); text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <main class="main">
+        <a class="back-link" href="../index.html">← Back to Arcade</a>
+        <header class="header">
+          <div class="game-card-icon" aria-hidden="true">🚗</div>
+          <h1>Driving Game</h1>
+          <p class="tagline">Dodge oil, trees, rocks and barricades!</p>
+        </header>
+
+        <div class="game-panel">
+          <div class="hud">
+            <div>Score: <span id="score">0</span></div>
+            <div>Best: <span id="best">0</span></div>
+            <div>Speed: <span id="speedo">0</span> mph</div>
+            <div>Lives: <span id="lives">❤️❤️❤️</span></div>
+          </div>
+          <p class="status" id="status">Press Space or tap Start</p>
+          <canvas id="c" width="420" height="640" aria-label="Top-down driving game"></canvas>
+          <button class="btn" type="button" id="startBtn">Start</button>
+          <div class="controls" aria-label="Touch controls">
+            <button type="button" id="leftBtn" aria-label="Steer left">◀</button>
+            <button type="button" id="upBtn" aria-label="Speed up">▲</button>
+            <button type="button" id="downBtn" aria-label="Slow down">▼</button>
+            <button type="button" id="rightBtn" aria-label="Steer right">▶</button>
+          </div>
+          <p class="hint">Steer with ◀ ▶ / A D · ▲ ▼ or W S to speed up and slow down · Drag on the road to steer · Oil makes you slide!</p>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      var canvas = document.getElementById("c");
+      var ctx = canvas.getContext("2d");
+      if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.roundRect) {
+        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h) {
+          this.rect(x, y, w, h);
+          return this;
+        };
+      }
+      var W = canvas.width;
+      var H = canvas.height;
+
+      var ROAD_LEFT = 58;
+      var ROAD_RIGHT = 362;
+      var ROAD_W = ROAD_RIGHT - ROAD_LEFT;
+      var LANES = 4;
+      var LANE_W = ROAD_W / LANES;
+
+      var state = "idle"; // idle | playing | over
+      var score = 0;
+      var best = 0;
+      var lives = 3;
+      var roadSpeed = 0; // pixels per second, set on reset
+      var scroll = 0;
+      var spawnTimer = 0;
+      var obstacles = [];
+      var floaters = [];
+      var keys = {};
+      var pointerSteer = null;
+      var lastTime = 0;
+
+      var car = {
+        x: W / 2,
+        y: H - 130,
+        w: 42,
+        h: 72,
+        vx: 0,
+        spin: 0,      // seconds of oil-slide left
+        invuln: 0,    // seconds of post-crash flashing
+      };
+
+      try {
+        best = parseInt(localStorage.getItem("gameCentralDrivingBest"), 10) || 0;
+      } catch (e) {}
+      document.getElementById("best").textContent = best;
+
+      function laneCenter(i) {
+        return ROAD_LEFT + LANE_W * i + LANE_W / 2;
+      }
+
+      function resetGame() {
+        score = 0;
+        lives = 3;
+        roadSpeed = 300;
+        spawnTimer = 0.9;
+        obstacles = [];
+        floaters = [];
+        car.x = W / 2;
+        car.y = H - 130;
+        car.vx = 0;
+        car.spin = 0;
+        car.invuln = 0;
+        updateHud();
+      }
+
+      function updateHud() {
+        document.getElementById("score").textContent = Math.floor(score);
+        document.getElementById("speedo").textContent = state === "playing" ? Math.round(roadSpeed / 6) : 0;
+        var hearts = "";
+        for (var i = 0; i < 3; i++) hearts += i < lives ? "❤️" : "🖤";
+        document.getElementById("lives").textContent = hearts;
+      }
+
+      var OBSTACLE_TYPES = ["barricade", "rock", "tree", "oil"];
+
+      function spawnRow() {
+        // Pick how many lanes to block, always leaving at least one open.
+        var r = Math.random();
+        var blockedCount = r < 0.55 ? 1 : r < 0.9 ? 2 : 3;
+        var lanes = [0, 1, 2, 3];
+        // Shuffle lanes.
+        for (var i = lanes.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var t = lanes[i]; lanes[i] = lanes[j]; lanes[j] = t;
+        }
+        for (var k = 0; k < blockedCount; k++) {
+          var lane = lanes[k];
+          var type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
+          var w = type === "barricade" ? 62 : type === "tree" ? 40 : type === "rock" ? 46 : 52;
+          var h = type === "barricade" ? 22 : type === "oil" ? 26 : 42;
+          obstacles.push({
+            type: type,
+            lane: lane,
+            x: laneCenter(lane) + (Math.random() * 10 - 5),
+            y: -50,
+            w: w,
+            h: h,
+            passed: false,
+            seed: Math.random() * 10,
+          });
+        }
+      }
+
+      function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+        return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+      }
+
+      function hitCar(o) {
+        // Forgiving hitboxes, like the video game feels.
+        var cw = car.w * 0.72, ch = car.h * 0.82;
+        var ow = o.w * 0.78, oh = o.h * 0.78;
+        return rectsOverlap(
+          car.x - cw / 2, car.y - ch / 2, cw, ch,
+          o.x - ow / 2, o.y - oh / 2, ow, oh
+        );
+      }
+
+      function addFloater(text, x, y, color) {
+        floaters.push({ text: text, x: x, y: y, life: 1, color: color || "#39FF14" });
+      }
+
+      function crash(o) {
+        lives--;
+        car.invuln = 1.6;
+        roadSpeed = Math.max(260, roadSpeed - 90);
+        addFloater("CRASH!", car.x, car.y - 55, "#FF2DAA");
+        if (lives <= 0) {
+          gameOver();
+        } else {
+          document.getElementById("status").textContent = "Crash! " + lives + (lives === 1 ? " life" : " lives") + " left";
+        }
+        updateHud();
+      }
+
+      function slip(o) {
+        car.spin = 1.4;
+        car.vx = (Math.random() < 0.5 ? -1 : 1) * 260;
+        addFloater("OIL SLIDE!", car.x, car.y - 55, "#00D9FF");
+        document.getElementById("status").textContent = "Oil! You're sliding!";
+      }
+
+      function update(dt) {
+        // Difficulty: the road keeps getting faster.
+        roadSpeed = Math.min(620, roadSpeed + dt * 7);
+        var boost = 0;
+        if (keys.up) boost += 130;
+        if (keys.down) boost -= 160;
+        var speed = Math.max(170, roadSpeed + boost);
+        scroll = (scroll + speed * dt) % 64;
+        score += speed * dt / 22;
+
+        // Steering.
+        var steer = 0;
+        if (keys.left) steer -= 1;
+        if (keys.right) steer += 1;
+        if (car.spin > 0) {
+          car.spin -= dt;
+          steer = -steer; // oil flips your steering
+          car.x += car.vx * dt;
+          car.vx *= Math.pow(0.12, dt);
+        } else if (pointerSteer != null) {
+          var dx = pointerSteer - car.x;
+          car.x += Math.max(-430 * dt, Math.min(430 * dt, dx));
+        } else {
+          car.x += steer * 330 * dt;
+        }
+
+        // Up / down nudges the car on screen a little, like in the video.
+        if (keys.up) car.y -= 90 * dt;
+        if (keys.down) car.y += 90 * dt;
+        car.y = Math.max(H * 0.45, Math.min(H - 80, car.y));
+
+        // Stay on the road — no hiding on the grass.
+        car.x = Math.max(ROAD_LEFT + car.w / 2 + 2, Math.min(ROAD_RIGHT - car.w / 2 - 2, car.x));
+
+        if (car.invuln > 0) car.invuln -= dt;
+
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnRow();
+          spawnTimer = Math.max(0.52, 1.05 - roadSpeed / 900) + Math.random() * 0.3;
+        }
+
+        for (var i = obstacles.length - 1; i >= 0; i--) {
+          var o = obstacles[i];
+          o.y += speed * dt;
+
+          if (!o.passed && o.y - o.h / 2 > car.y + car.h / 2) {
+            o.passed = true;
+            var gap = Math.abs(o.x - car.x);
+            if (gap < LANE_W * 1.15 && o.type !== "oil") {
+              score += 10;
+              addFloater("Near miss +10", car.x, car.y - 55);
+            }
+          }
+
+          if (hitCar(o)) {
+            if (o.type === "oil") {
+              obstacles.splice(i, 1);
+              if (car.spin <= 0) slip(o);
+              continue;
+            }
+            if (car.invuln <= 0) {
+              obstacles.splice(i, 1);
+              crash(o);
+              if (state !== "playing") return;
+              continue;
+            }
+          }
+
+          if (o.y - o.h / 2 > H + 30) obstacles.splice(i, 1);
+        }
+
+        for (var f = floaters.length - 1; f >= 0; f--) {
+          floaters[f].y -= 42 * dt;
+          floaters[f].life -= dt;
+          if (floaters[f].life <= 0) floaters.splice(f, 1);
+        }
+
+        updateHud();
+      }
+
+      function drawRoad() {
+        // Grass.
+        ctx.fillStyle = "#35c93a";
+        ctx.fillRect(0, 0, W, H);
+
+        // Red / white kerbs scrolling past.
+        var stripeH = 32;
+        for (var side = 0; side < 2; side++) {
+          var x = side === 0 ? ROAD_LEFT - 16 : ROAD_RIGHT;
+          for (var y = -stripeH + (scroll % (stripeH * 2)); y < H; y += stripeH) {
+            ctx.fillStyle = ((Math.round((y - (scroll % (stripeH * 2))) / stripeH) % 2) + 2) % 2 === 0 ? "#ee3333" : "#ffffff";
+            ctx.fillRect(x, y, 16, stripeH);
+          }
+        }
+
+        // Asphalt.
+        ctx.fillStyle = "#33363b";
+        ctx.fillRect(ROAD_LEFT, 0, ROAD_W, H);
+
+        // Edge lines.
+        ctx.fillStyle = "#f5f5f5";
+        ctx.fillRect(ROAD_LEFT, 0, 4, H);
+        ctx.fillRect(ROAD_RIGHT - 4, 0, 4, H);
+
+        // Dashed lane lines.
+        ctx.fillStyle = "#f5f5f5";
+        for (var lane = 1; lane < LANES; lane++) {
+          var lx = ROAD_LEFT + LANE_W * lane - 3;
+          for (var dy = -64 + scroll; dy < H; dy += 64) {
+            ctx.fillRect(lx, dy, 6, 34);
+          }
+        }
+      }
+
+      function drawObstacle(o) {
+        ctx.save();
+        ctx.translate(o.x, o.y);
+        if (o.type === "oil") {
+          ctx.fillStyle = "#101014";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.25)";
+          ctx.beginPath();
+          ctx.ellipse(-8, -4, 10, 4, -0.4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (o.type === "tree") {
+          ctx.fillStyle = "#7a4a21";
+          ctx.fillRect(-4, 6, 8, 14);
+          ctx.fillStyle = "#1e9e3a";
+          ctx.beginPath();
+          ctx.arc(0, -4, 19, 0, Math.PI * 2);
+          ctx.arc(-11, 4, 12, 0, Math.PI * 2);
+          ctx.arc(11, 4, 12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#35c93a";
+          ctx.beginPath();
+          ctx.arc(-5, -9, 7, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (o.type === "rock") {
+          ctx.fillStyle = "#8d8d94";
+          ctx.beginPath();
+          ctx.moveTo(-o.w / 2, o.h / 2);
+          ctx.lineTo(-o.w / 3, -o.h / 3);
+          ctx.lineTo(0, -o.h / 2);
+          ctx.lineTo(o.w / 2, -o.h / 4);
+          ctx.lineTo(o.w / 2, o.h / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#b9b9c0";
+          ctx.beginPath();
+          ctx.moveTo(-o.w / 5, o.h / 4);
+          ctx.lineTo(0, -o.h / 2);
+          ctx.lineTo(o.w / 4, 0);
+          ctx.closePath();
+          ctx.fill();
+        } else { // barricade
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+          ctx.fillStyle = "#ff7a1a";
+          var sw = 12;
+          for (var x = -o.w / 2; x < o.w / 2; x += sw * 2) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, -o.h / 2, sw, o.h);
+            ctx.clip();
+            ctx.translate(x + sw / 2, 0);
+            ctx.rotate(0.5);
+            ctx.fillRect(-sw, -o.h, sw, o.h * 2);
+            ctx.restore();
+          }
+          ctx.strokeStyle = "#7a3c00";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(-o.w / 2, -o.h / 2, o.w, o.h);
+          ctx.fillStyle = "#7a4a21";
+          ctx.fillRect(-o.w / 2 + 4, o.h / 2, 6, 8);
+          ctx.fillRect(o.w / 2 - 10, o.h / 2, 6, 8);
+        }
+        ctx.restore();
+      }
+
+      function drawCar() {
+        if (car.invuln > 0 && Math.floor(car.invuln * 12) % 2 === 0 && state === "playing") return;
+        ctx.save();
+        ctx.translate(car.x, car.y);
+        if (car.spin > 0) ctx.rotate(Math.sin(car.spin * 22) * 0.35);
+
+        // Wheels.
+        ctx.fillStyle = "#151515";
+        ctx.fillRect(-car.w / 2 - 3, -car.h / 3, 7, 16);
+        ctx.fillRect(car.w / 2 - 4, -car.h / 3, 7, 16);
+        ctx.fillRect(-car.w / 2 - 3, car.h / 3 - 14, 7, 16);
+        ctx.fillRect(car.w / 2 - 4, car.h / 3 - 14, 7, 16);
+
+        // Body.
+        ctx.fillStyle = "#2456e6";
+        ctx.beginPath();
+        ctx.roundRect(-car.w / 2, -car.h / 2, car.w, car.h, 10);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-4, -car.h / 2, 8, car.h);
+
+        // Windows.
+        ctx.fillStyle = "#aee6ff";
+        ctx.beginPath();
+        ctx.roundRect(-car.w / 2 + 6, -car.h / 4, car.w - 12, 15, 4);
+        ctx.fill();
+        ctx.fillStyle = "#79c7ec";
+        ctx.beginPath();
+        ctx.roundRect(-car.w / 2 + 6, car.h / 6, car.w - 12, 11, 4);
+        ctx.fill();
+
+        // Lights.
+        ctx.fillStyle = "#fff6a3";
+        ctx.fillRect(-car.w / 2 + 4, -car.h / 2 + 2, 8, 5);
+        ctx.fillRect(car.w / 2 - 12, -car.h / 2 + 2, 8, 5);
+        ctx.fillStyle = "#ff4444";
+        ctx.fillRect(-car.w / 2 + 4, car.h / 2 - 7, 8, 5);
+        ctx.fillRect(car.w / 2 - 12, car.h / 2 - 7, 8, 5);
+
+        ctx.restore();
+      }
+
+      function drawCenterText(title, sub) {
+        ctx.fillStyle = "rgba(6, 9, 18, 0.62)";
+        ctx.fillRect(ROAD_LEFT, H / 2 - 78, ROAD_W, 156);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "800 28px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(title, W / 2, H / 2 - 22);
+        ctx.font = "600 16px system-ui, sans-serif";
+        ctx.fillStyle = "#d9d9d9";
+        var lines = sub.split("\n");
+        for (var i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], W / 2, H / 2 + 8 + i * 22);
+        }
+      }
+
+      function draw() {
+        drawRoad();
+        obstacles.forEach(drawObstacle);
+        drawCar();
+
+        floaters.forEach(function (f) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, f.life));
+          ctx.fillStyle = f.color;
+          ctx.font = "800 16px system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(f.text, f.x, f.y);
+          ctx.restore();
+        });
+
+        if (state === "idle") {
+          drawCenterText("DRIVING GAME", "Dodge oil, trees, rocks\nand barricades!\nPress Space or tap Start");
+        } else if (state === "over") {
+          drawCenterText("GAME OVER", "Score: " + Math.floor(score) + "\nBest: " + best + "\nPress Space or tap Start");
+        }
+      }
+
+      function gameOver() {
+        state = "over";
+        var s = Math.floor(score);
+        if (s > best) {
+          best = s;
+          try { localStorage.setItem("gameCentralDrivingBest", String(best)); } catch (e) {}
+          document.getElementById("best").textContent = best;
+        }
+        document.getElementById("status").textContent = "Game over! Score: " + s;
+        document.getElementById("startBtn").textContent = "Play again";
+        updateHud();
+        draw();
+      }
+
+      function startGame() {
+        resetGame();
+        state = "playing";
+        document.getElementById("status").textContent = "Go! Stay on the road!";
+        document.getElementById("startBtn").textContent = "Restart";
+      }
+
+      function loop(now) {
+        if (state !== "playing") return;
+        if (!lastTime) lastTime = now;
+        var dt = Math.min(0.033, (now - lastTime) / 1000);
+        lastTime = now;
+        update(dt);
+        draw();
+        if (state === "playing") requestAnimationFrame(loop);
+      }
+
+      function beginLoop() {
+        lastTime = 0;
+        requestAnimationFrame(loop);
+      }
+
+      document.getElementById("startBtn").addEventListener("click", function () {
+        startGame();
+        beginLoop();
+      });
+
+      function setKey(name, on) {
+        keys[name] = on;
+        if (state !== "playing" && on && (name === "left" || name === "right" || name === "up")) return;
+      }
+
+      function bindHold(id, name) {
+        var el = document.getElementById(id);
+        function on(e) { e.preventDefault(); setKey(name, true); }
+        function off(e) { if (e) e.preventDefault(); setKey(name, false); }
+        el.addEventListener("pointerdown", on);
+        el.addEventListener("pointerup", off);
+        el.addEventListener("pointercancel", off);
+        el.addEventListener("pointerleave", off);
+        el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      }
+      bindHold("leftBtn", "left");
+      bindHold("rightBtn", "right");
+      bindHold("upBtn", "up");
+      bindHold("downBtn", "down");
+
+      canvas.addEventListener("pointerdown", function (e) {
+        if (state !== "playing") {
+          startGame();
+          beginLoop();
+          return;
+        }
+        var rect = canvas.getBoundingClientRect();
+        pointerSteer = (e.clientX - rect.left) * (W / rect.width);
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (pointerSteer == null) return;
+        var rect = canvas.getBoundingClientRect();
+        pointerSteer = (e.clientX - rect.left) * (W / rect.width);
+      });
+      function clearPointer() { pointerSteer = null; }
+      canvas.addEventListener("pointerup", clearPointer);
+      canvas.addEventListener("pointercancel", clearPointer);
+      canvas.addEventListener("pointerleave", clearPointer);
+
+      var KEYMAP = {
+        ArrowLeft: "left", KeyA: "left",
+        ArrowRight: "right", KeyD: "right",
+        ArrowUp: "up", KeyW: "up",
+        ArrowDown: "down", KeyS: "down",
+      };
+
+      document.addEventListener("keydown", function (e) {
+        if (e.code === "Space") {
+          e.preventDefault();
+          if (state !== "playing") { startGame(); beginLoop(); }
+          return;
+        }
+        var name = KEYMAP[e.code];
+        if (name) {
+          e.preventDefault();
+          setKey(name, true);
+        }
+      });
+      document.addEventListener("keyup", function (e) {
+        var name = KEYMAP[e.code];
+        if (name) setKey(name, false);
+      });
+
+      resetGame();
+      draw();
+    </script>
+    <script src="../shared.js"></script>
+  </body>
+</html>
