@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Earth Day Quiz — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .q-emoji{font-size:3.2rem;text-align:center;line-height:1}
+  .q-text{font-size:1.2rem;font-weight:800;text-align:center}
+  .options{display:grid;gap:.55rem;width:min(100%,460px)}
+  .option{padding:.85rem 1rem;border-radius:var(--radius);border:2px solid var(--ocean);background:var(--surface-hover);color:var(--text);font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer;text-align:left}
+  .option.correct{border-color:var(--neon-green);background:rgba(57,255,20,.15)}
+  .option.wrong{border-color:var(--neon-pink);background:rgba(255,45,170,.12)}
+  .option:disabled{cursor:default}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">🐞</div><h1>Earth Day Quiz</h1><p class="tagline">How much do you know about our planet?</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Score: <span id="score">0</span></div><div>Question: <span id="progress">1 / 10</span></div></div>
+  <p class="status" id="status">Good luck, Earth hero!</p>
+  <div class="q-emoji" id="qEmoji">🌍</div>
+  <p class="q-text" id="qText"></p>
+  <div class="options" id="options"></div>
+  <button class="btn" type="button" id="nextBtn" style="display:none">Next question →</button>
+  <button class="btn btn-secondary" type="button" id="restartBtn" style="display:none">Play again</button>
+  <p class="hint" id="explain"></p>
+</div>
+</main></div>
+<script>
+var QUESTIONS=[
+["🌱","Which of these helps the Earth the most?",["Planting a tree","Throwing trash on the ground","Leaving lights on all day","Using more plastic"],0,"Trees clean the air and give animals a home."],
+["♻️","What does the word “recycle” mean?",["Throw everything away","Use something again to make something new","Burn old toys","Hide trash outside"],1,"Recycling turns old cans, paper, and bottles into new things."],
+["💧","Which is a smart way to save water?",["Let the tap run while brushing","Take shorter showers","Fill the tub to the top every day","Water the sidewalk"],1,"Short showers can save many buckets of water every week."],
+["🐝","Why are bees important?",["They make yummy honey only","They help flowers and food plants grow","They chase butterflies","They build houses"],1,"Bees carry pollen, which helps plants make seeds, fruits, and vegetables."],
+["🌊","Where does most plastic in the ocean come from?",["Fish drop it","It falls from the sky","Trash from land washes into rivers and seas","Whales make it"],2,"Trash left on land can blow or wash into waterways and reach the ocean."],
+["🔋","What should you do with old batteries?",["Throw them in any bin","Take them to a battery recycling spot","Bury them in the garden","Toss them in a lake"],1,"Batteries have chemicals inside, so they need special recycling."],
+["🚶","Which trip is kindest to the Earth?",["Driving one block alone","Walking or biking to a nearby place","Taking a plane to the park","Riding in a car with the windows down"],1,"Walking and biking make no air pollution at all."],
+["🌳","What do plants take in from the air?",["Carbon dioxide","Smoke","Plastic","Dust"],0,"Plants soak up carbon dioxide and give us oxygen to breathe."],
+["🐢","Why is plastic dangerous for sea turtles?",["It tastes spicy","They can mistake bags for jellyfish food","It makes them swim too fast","It changes their color"],1,"A floating bag looks like a jellyfish — a turtle's favorite snack."],
+["🌎","When is Earth Day celebrated?",["December 25","July 4","April 22","October 31"],2,"Earth Day is April 22, celebrated all around the world."]];
+var order=[],qi=0,score=0,answered=false;
+var optionsEl=document.getElementById("options"),statusEl=document.getElementById("status"),explainEl=document.getElementById("explain");
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function show(){
+ answered=false;explainEl.textContent="";document.getElementById("nextBtn").style.display="none";
+ var q=QUESTIONS[order[qi]];
+ document.getElementById("qEmoji").textContent=q[0];document.getElementById("qText").textContent=q[1];
+ document.getElementById("progress").textContent=(qi+1)+" / "+QUESTIONS.length;
+ var opts=q[2].map(function(text,i){return{text:text,correct:i===q[3]};});
+ opts=shuffle(opts);optionsEl.innerHTML="";
+ opts.forEach(function(o){var b=document.createElement("button");b.type="button";b.className="option";b.textContent=o.text;b.addEventListener("click",function(){answer(o,b);});optionsEl.appendChild(b);});
+}
+function answer(o,btn){
+ if(answered)return;answered=true;
+ var q=QUESTIONS[order[qi]];
+ optionsEl.querySelectorAll(".option").forEach(function(b){b.disabled=true;if(b.textContent===q[2][q[3]])b.classList.add("correct");});
+ if(o.correct){score+=10;document.getElementById("score").textContent=score;statusEl.textContent="🎉 Correct!";}
+ else{btn.classList.add("wrong");statusEl.textContent="Not quite — the green answer is right.";}
+ explainEl.textContent=q[4];
+ if(qi>=QUESTIONS.length-1){document.getElementById("restartBtn").style.display="";statusEl.textContent=score>=90?"🏆 Perfect planet protector!":score>=60?"🌟 Great job, Earth hero!":"🌱 Good try — play again to beat "+score+"!";}
+ else document.getElementById("nextBtn").style.display="";
+}
+function restart(){order=shuffle(QUESTIONS.map(function(_,i){return i;}));qi=0;score=0;document.getElementById("score").textContent=0;document.getElementById("restartBtn").style.display="none";statusEl.textContent="Good luck, Earth hero!";show();}
+document.getElementById("nextBtn").addEventListener("click",function(){qi++;statusEl.textContent="Question "+(qi+1)+"…";show();});
+document.getElementById("restartBtn").addEventListener("click",restart);
+restart();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>

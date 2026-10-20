@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Block Breaker — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .main{max-width:560px}
+  canvas{border:2px solid var(--ocean);border-radius:var(--radius);background:#060912;display:block;width:min(100%,480px);height:auto;margin:0 auto;touch-action:none}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">🧱</div><h1>Block Breaker</h1><p class="tagline">Bounce the ball and smash every block!</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Score: <span id="score">0</span></div><div>Best: <span id="best">0</span></div><div>Lives: <span id="lives">❤️❤️❤️</span></div><div>Level: <span id="level">1</span></div></div>
+  <p class="status" id="status">Press Space or tap Start</p>
+  <canvas id="c" width="480" height="360" aria-label="Block breaker game"></canvas>
+  <button class="btn" type="button" id="startBtn">Start</button>
+  <p class="hint">Move the paddle with your mouse, finger, or ◀ ▶ arrow keys.</p>
+</div>
+</main></div>
+<script>
+var canvas=document.getElementById("c"),ctx=canvas.getContext("2d"),W=canvas.width,H=canvas.height;
+var state="idle",score=0,best=0,lives=3,level=1,lastTime=0;
+try{best=parseInt(localStorage.getItem("gameCentralBlockBreakerBest"),10)||0;}catch(e){}
+document.getElementById("best").textContent=best;
+var paddle={w:84,h:12,x:W/2,y:H-26,speed:420};
+var ball={x:W/2,y:H-60,r:8,vx:170,vy:-250};
+var bricks=[],ROWS=5,COLS=8;
+var ROW_COLORS=["#ff5a5a","#ffb340","#ffe14d","#59d95e","#3ec6ff"];
+var keys={};
+function buildBricks(){bricks=[];var bw=(W-40)/COLS,bh=20;for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++)bricks.push({x:20+c*bw+2,y:46+r*(bh+6),w:bw-4,h:bh,color:ROW_COLORS[r],alive:true});}
+function resetBall(){ball.x=paddle.x;ball.y=paddle.y-16;var speed=280+level*25;var ang=(-60+Math.random()*40)*Math.PI/180;ball.vx=Math.sin(ang)*speed;ball.vy=-Math.cos(ang)*speed;}
+function resetGame(){score=0;lives=3;level=1;paddle.x=W/2;buildBricks();resetBall();updateHud();}
+function updateHud(){document.getElementById("score").textContent=score;document.getElementById("level").textContent=level;var h="";for(var i=0;i<3;i++)h+=i<lives?"❤️":"🖤";document.getElementById("lives").textContent=h;}
+function startGame(){resetGame();state="playing";document.getElementById("status").textContent="Break those blocks!";document.getElementById("startBtn").textContent="Restart";lastTime=0;requestAnimationFrame(loop);}
+function gameOver(){state="over";if(score>best){best=score;try{localStorage.setItem("gameCentralBlockBreakerBest",String(best));}catch(e){}document.getElementById("best").textContent=best;}document.getElementById("status").textContent="Game over! Score: "+score;document.getElementById("startBtn").textContent="Play again";draw();}
+function update(dt){
+ if(keys.left)paddle.x-=paddle.speed*dt; if(keys.right)paddle.x+=paddle.speed*dt;
+ paddle.x=Math.max(paddle.w/2,Math.min(W-paddle.w/2,paddle.x));
+ ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
+ if(ball.x-ball.r<0){ball.x=ball.r;ball.vx=Math.abs(ball.vx);} if(ball.x+ball.r>W){ball.x=W-ball.r;ball.vx=-Math.abs(ball.vx);}
+ if(ball.y-ball.r<0){ball.y=ball.r;ball.vy=Math.abs(ball.vy);}
+ if(ball.vy>0&&ball.y+ball.r>=paddle.y&&ball.y-ball.r<=paddle.y+12&&Math.abs(ball.x-paddle.x)<=paddle.w/2+ball.r){var hit=(ball.x-paddle.x)/(paddle.w/2);var sp=Math.sqrt(ball.vx*ball.vx+ball.vy*ball.vy);var ang=hit*1.05;ball.vx=Math.sin(ang)*sp;ball.vy=-Math.cos(ang)*sp;ball.y=paddle.y-ball.r-1;}
+ for(var i=0;i<bricks.length;i++){var b=bricks[i];if(!b.alive)continue;if(ball.x+ball.r>b.x&&ball.x-ball.r<b.x+b.w&&ball.y+ball.r>b.y&&ball.y-ball.r<b.y+b.h){b.alive=false;score+=10;ball.vy=ball.vy>0?-Math.abs(ball.vy):Math.abs(ball.vy);break;}}
+ updateHud();
+ if(bricks.every(function(b){return !b.alive;})){level++;document.getElementById("status").textContent="Level "+level+"! Faster!";buildBricks();resetBall();return;}
+ if(ball.y-ball.r>H){lives--;updateHud();if(lives<=0){gameOver();return;}document.getElementById("status").textContent="Ball lost! "+lives+" left";resetBall();}
+}
+function draw(){
+ ctx.fillStyle="#060912";ctx.fillRect(0,0,W,H);
+ bricks.forEach(function(b){if(!b.alive)return;ctx.fillStyle=b.color;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,5);ctx.fill();});
+ ctx.fillStyle="#00D9FF";ctx.beginPath();ctx.roundRect(paddle.x-paddle.w/2,paddle.y,paddle.w,paddle.h,6);ctx.fill();
+ ctx.fillStyle="#ffffff";ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
+ if(state!=="playing"){ctx.fillStyle="rgba(255,255,255,.9)";ctx.font="800 22px system-ui,sans-serif";ctx.textAlign="center";ctx.fillText(state==="over"?"GAME OVER":"BLOCK BREAKER",W/2,H/2-8);ctx.font="600 15px system-ui,sans-serif";ctx.fillStyle="#d9d9d9";ctx.fillText(state==="over"?("Score: "+score):"Press Space or tap Start",W/2,H/2+20);}
+}
+function loop(now){if(state!=="playing")return;if(!lastTime)lastTime=now;var dt=Math.min(.033,(now-lastTime)/1000);lastTime=now;update(dt);draw();if(state==="playing")requestAnimationFrame(loop);}
+function movePaddleTo(clientX){var rect=canvas.getBoundingClientRect();paddle.x=(clientX-rect.left)*(W/rect.width);paddle.x=Math.max(paddle.w/2,Math.min(W-paddle.w/2,paddle.x));}
+canvas.addEventListener("pointermove",function(e){movePaddleTo(e.clientX);});
+canvas.addEventListener("pointerdown",function(e){movePaddleTo(e.clientX);if(state!=="playing")startGame();});
+document.getElementById("startBtn").addEventListener("click",startGame);
+document.addEventListener("keydown",function(e){if(e.code==="Space"){e.preventDefault();if(state!=="playing")startGame();}if(e.code==="ArrowLeft")keys.left=true;if(e.code==="ArrowRight")keys.right=true;});
+document.addEventListener("keyup",function(e){if(e.code==="ArrowLeft")keys.left=false;if(e.code==="ArrowRight")keys.right=false;});
+if(window.CanvasRenderingContext2D&&!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h){this.rect(x,y,w,h);return this;};}
+resetGame();draw();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>

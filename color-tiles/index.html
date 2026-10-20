@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Color Tiles — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .board{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;width:min(100%,420px);margin:0 auto}
+  .tile{aspect-ratio:1;border:none;border-radius:12px;cursor:pointer;font-size:1.25rem;display:flex;align-items:center;justify-content:center;transition:transform .12s ease,opacity .12s ease;touch-action:manipulation}
+  .tile:hover{transform:scale(1.07)}
+  .tile:active{transform:scale(.95)}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">🟨</div><h1>Color Tiles</h1><p class="tagline">Tap a group of matching tiles to clear them!</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Score: <span id="score">0</span></div><div>Best: <span id="best">0</span></div><div>Moves: <span id="moves">0</span></div></div>
+  <p class="status" id="status">Tap 2 or more tiles of the same color that touch.</p>
+  <div class="board" id="board" role="grid" aria-label="Color tiles board"></div>
+  <button class="btn btn-secondary" type="button" id="newBtn">New game</button>
+  <p class="hint">Bigger groups = way more points. Tiles fall down and new ones drop in.</p>
+</div>
+</main></div>
+<script>
+var COLORS=[
+ {bg:"#ff5a5a",face:"●"},{bg:"#ffb340",face:"●"},{bg:"#ffe14d",face:"●"},
+ {bg:"#59d95e",face:"●"},{bg:"#3ec6ff",face:"●"},{bg:"#b07aff",face:"●"}];
+var SIZE=8, board=[], score=0, moves=0, best=0;
+try{best=parseInt(localStorage.getItem("gameCentralColorTilesBest"),10)||0;}catch(e){}
+document.getElementById("best").textContent=best;
+var boardEl=document.getElementById("board"), statusEl=document.getElementById("status");
+function randColor(){return Math.floor(Math.random()*COLORS.length);}
+function newBoard(){board=[];for(var r=0;r<SIZE;r++){board.push([]);for(var c=0;c<SIZE;c++)board[r].push(randColor());}if(!hasGroup())return newBoard();score=0;moves=0;updateHud();render();statusEl.textContent="Tap 2 or more tiles of the same color that touch.";}
+function updateHud(){document.getElementById("score").textContent=score;document.getElementById("moves").textContent=moves;}
+function render(){boardEl.innerHTML="";for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++){(function(r,c){var b=document.createElement("button");b.type="button";b.className="tile";b.style.background=COLORS[board[r][c]].bg;b.style.color="rgba(0,0,0,.25)";b.textContent=COLORS[board[r][c]].face;b.setAttribute("aria-label","Tile row "+(r+1)+" column "+(c+1));b.addEventListener("click",function(){tap(r,c);});boardEl.appendChild(b);})(r,c);}}
+function groupAt(r,c){var color=board[r][c],seen={},stack=[[r,c]],cells=[];seen[r+","+c]=true;while(stack.length){var p=stack.pop();cells.push(p);var dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(var i=0;i<dirs.length;i++){var nr=p[0]+dirs[i][0],nc=p[1]+dirs[i][1];if(nr<0||nr>=SIZE||nc<0||nc>=SIZE)continue;var k=nr+","+nc;if(seen[k]||board[nr][nc]!==color)continue;seen[k]=true;stack.push([nr,nc]);}}return cells;}
+function hasGroup(){for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++)if(groupAt(r,c).length>=2)return true;return false;}
+function tap(r,c){var cells=groupAt(r,c);if(cells.length<2){statusEl.textContent="That tile is alone — find 2 or more touching tiles of the same color.";return;}cells.forEach(function(p){board[p[0]][p[1]]=-1;});var gained=cells.length*(cells.length-1)*10;score+=gained;moves++;for(var col=0;col<SIZE;col++){var write=SIZE-1;for(var row=SIZE-1;row>=0;row--){if(board[row][col]!==-1){var v=board[row][col];board[row][col]=-1;board[write][col]=v;write--;}}for(var fill=write;fill>=0;fill--)board[fill][col]=randColor();}
+ if(score>best){best=score;try{localStorage.setItem("gameCentralColorTilesBest",String(best));}catch(e){}document.getElementById("best").textContent=best;}
+ statusEl.textContent="Cleared "+cells.length+" tiles! +"+gained+" points";updateHud();render();if(!hasGroup()){statusEl.textContent="No groups left — shuffling the board!";setTimeout(function(){newBoardKeepScore();},700);}}
+function newBoardKeepScore(){var s=score,m=moves;newBoard();score=s;moves=m;updateHud();statusEl.textContent="Fresh tiles! Keep going.";}
+document.getElementById("newBtn").addEventListener("click",newBoard);
+newBoard();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>

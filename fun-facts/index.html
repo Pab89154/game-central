@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fun Facts — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .fact-card{width:min(100%,520px);background:var(--surface-hover);border:2px solid var(--neon-purple);border-radius:var(--radius);padding:1.5rem;text-align:center}
+  .fact-emoji{font-size:3.5rem;line-height:1}
+  .fact-text{font-size:1.25rem;font-weight:700;line-height:1.5;margin:.8rem 0}
+  .fact-cat{display:inline-block;background:rgba(0,217,255,.15);color:var(--neon-blue);border-radius:999px;padding:.2rem .7rem;font-weight:800;font-size:.8rem}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">💡</div><h1>Fun Facts</h1><p class="tagline">Wow your friends with amazing facts!</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Facts seen: <span id="seen">0</span></div><div>Left in deck: <span id="left">0</span></div></div>
+  <p class="status" id="status">Tap the button for a fun fact!</p>
+  <div class="fact-card"><div class="fact-emoji" id="factEmoji">💡</div><p class="fact-text" id="factText">Ready to learn something amazing?</p><span class="fact-cat" id="factCat">Fun Facts</span></div>
+  <button class="btn" type="button" id="nextBtn">New fact!</button>
+  <p class="hint">Every fact in the deck shows up before any repeats.</p>
+</div>
+</main></div>
+<script>
+var FACTS=[
+["🐙","Animals","An octopus has three hearts and blue blood."],
+["🦒","Animals","A giraffe's tongue is so long it can lick its own ears."],
+["🐌","Animals","Snails can sleep for up to three years."],
+["🦩","Animals","Flamingos are born gray — they turn pink from the food they eat."],
+["🐘","Animals","Elephants are the only animals that can't jump."],
+["🦉","Animals","A group of owls is called a parliament."],
+["🐝","Animals","Honey bees can recognize human faces."],
+["🦘","Animals","Kangaroos can't walk backwards."],
+["🚀","Space","Footprints on the Moon can stay there for millions of years because there is no wind."],
+["🪐","Space","Saturn is so light it would float in a giant bathtub of water."],
+["☀️","Space","The Sun is so big that about a million Earths could fit inside it."],
+["🌙","Space","The Moon is slowly drifting away from Earth — about as fast as your fingernails grow."],
+["⭐","Space","There are more stars in the sky than grains of sand on all the beaches on Earth."],
+["🍌","Food","Bananas are berries, but strawberries are not!"],
+["🍯","Food","Honey never spoils. Pots of honey found in ancient tombs are still good to eat."],
+["🥜","Food","Peanuts are one of the ingredients in dynamite."],
+["🍓","Food","Strawberries have their seeds on the outside — about 200 on each one."],
+["🥕","Food","Carrots were originally purple. Orange ones were grown later by farmers."],
+["🌍","Earth","Earth is the only planet not named after a god."],
+["🌊","Earth","The Pacific Ocean is wider than the Moon is across."],
+["⚡","Earth","A bolt of lightning is five times hotter than the surface of the Sun."],
+["🌋","Earth","There is a volcano on Mars nearly three times taller than Mount Everest."],
+["🧊","Earth","Antarctica is the biggest desert in the world — it's just made of ice."],
+["🧠","Your Body","Your nose can remember about 50,000 different smells."],
+["💪","Your Body","The strongest muscle in your body (for its size) is in your jaw."],
+["🦴","Your Body","Babies have about 100 more bones than adults do."],
+["👅","Your Body","Your tongue print is unique, just like your fingerprint."],
+["❤️","Your Body","Your heart beats about 100,000 times every day."],
+["🎲","Games","The world's first video game was made in 1958 — it was a tennis game."],
+["♟️","Games","There are more possible chess games than atoms in the known universe."]];
+var deck=[],seen=0;
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function refill(){deck=shuffle(FACTS.map(function(_,i){return i;}));}
+function updateHud(){document.getElementById("seen").textContent=seen;document.getElementById("left").textContent=deck.length;}
+function next(){
+ if(!deck.length){refill();document.getElementById("status").textContent="You saw them all! Starting the deck over.";}
+ else document.getElementById("status").textContent="Did you know…?";
+ var f=FACTS[deck.pop()];seen++;
+ document.getElementById("factEmoji").textContent=f[0];
+ document.getElementById("factCat").textContent=f[1];
+ document.getElementById("factText").textContent=f[2];
+ updateHud();
+}
+document.getElementById("nextBtn").addEventListener("click",next);
+refill();updateHud();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>

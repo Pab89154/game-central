@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Animal Sounds — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .play-btn{font-size:1.1rem;padding:1rem 1.6rem;border-radius:999px}
+  .options{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;width:min(100%,460px)}
+  .option{padding:1rem .5rem;border-radius:var(--radius);border:2px solid var(--ocean);background:var(--surface-hover);color:var(--text);font-family:inherit;font-size:1.05rem;font-weight:800;cursor:pointer}
+  .option .emoji{font-size:2rem;display:block}
+  .option.correct{border-color:var(--neon-green);background:rgba(57,255,20,.15)}
+  .option.wrong{border-color:var(--neon-pink);background:rgba(255,45,170,.12)}
+  .option:disabled{cursor:default;opacity:.92}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">🐱</div><h1>Animal Sounds</h1><p class="tagline">Listen… which animal is that?</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Score: <span id="score">0</span></div><div>Streak: <span id="streak">0</span> 🔥</div><div>Round: <span id="round">1 / 10</span></div></div>
+  <p class="status" id="status">Tap Play sound, then pick the animal!</p>
+  <button class="btn play-btn" type="button" id="playBtn">🔊 Play sound</button>
+  <div class="options" id="options"></div>
+  <button class="btn btn-secondary" type="button" id="nextBtn" style="display:none">Next animal →</button>
+  <button class="btn btn-secondary" type="button" id="restartBtn" style="display:none">Play again</button>
+  <p class="hint">Tip: turn your sound on. If you can't hear, the sound word appears after you answer.</p>
+</div>
+</main></div>
+<script>
+var ANIMALS=[
+["Cow","🐄","Moo! Moo!"],["Dog","🐶","Woof! Woof!"],["Cat","🐱","Meow! Meow!"],["Lion","🦁","Roar!"],
+["Frog","🐸","Ribbit! Ribbit!"],["Duck","🦆","Quack! Quack!"],["Pig","🐷","Oink! Oink!"],["Sheep","🐑","Baa! Baa!"],
+["Horse","🐴","Neigh!"],["Owl","🦉","Whoo! Whoo!"],["Bee","🐝","Buzz buzz buzz!"],["Snake","🐍","Ssssss!"],
+["Elephant","🐘","Brrrraaaah!"],["Monkey","🐵","Ooh ooh! Ah ah!"],["Rooster","🐓","Cock-a-doodle-doo!"],["Wolf","🐺","Awooo!"]];
+var ROUNDS=10,round=1,score=0,streak=0,current=null,answered=false,used=[];
+var statusEl=document.getElementById("status"),optionsEl=document.getElementById("options");
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function speak(text){try{if(!window.speechSynthesis)return false;speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.rate=.85;speechSynthesis.speak(u);return true;}catch(e){return false;}}
+function newRound(){
+ answered=false;document.getElementById("nextBtn").style.display="none";
+ if(used.length>=ANIMALS.length)used=[];
+ var pool=ANIMALS.filter(function(a){return used.indexOf(a[0])===-1;});
+ current=pool[Math.floor(Math.random()*pool.length)];used.push(current[0]);
+ var others=shuffle(ANIMALS.filter(function(a){return a[0]!==current[0];})).slice(0,3);
+ var opts=shuffle(others.concat([current]));
+ optionsEl.innerHTML="";
+ opts.forEach(function(a){var b=document.createElement("button");b.type="button";b.className="option";b.innerHTML='<span class="emoji">'+a[1]+'</span>'+a[0];b.addEventListener("click",function(){answer(a,b);});optionsEl.appendChild(b);});
+ document.getElementById("round").textContent=Math.min(round,ROUNDS)+" / "+ROUNDS;
+ statusEl.textContent="Round "+round+" — tap Play sound!";
+}
+function answer(a,btn){
+ if(answered)return;answered=true;
+ var buttons=optionsEl.querySelectorAll(".option");
+ if(a[0]===current[0]){score+=10+streak*2;streak++;btn.classList.add("correct");statusEl.textContent="🎉 Yes! A "+current[0]+" says “"+current[2]+"”";}
+ else{streak=0;btn.classList.add("wrong");buttons.forEach(function(b){if(b.textContent.indexOf(current[0])!==-1)b.classList.add("correct");});statusEl.textContent="That was a "+current[0]+" — “"+current[2]+"”";}
+ buttons.forEach(function(b){b.disabled=true;});
+ document.getElementById("score").textContent=score;document.getElementById("streak").textContent=streak;
+ if(round>=ROUNDS){document.getElementById("restartBtn").style.display="";statusEl.textContent+=(score>=100?" 🏆 Animal sound master!":" — Game over!");}
+ else document.getElementById("nextBtn").style.display="";
+}
+document.getElementById("playBtn").addEventListener("click",function(){if(!current)return;if(!speak(current[2]))statusEl.textContent="Sound on this device says: “"+current[2]+"” — which animal?";});
+document.getElementById("nextBtn").addEventListener("click",function(){round++;newRound();});
+document.getElementById("restartBtn").addEventListener("click",function(){round=1;score=0;streak=0;used=[];document.getElementById("score").textContent=0;document.getElementById("streak").textContent=0;this.style.display="none";newRound();});
+newRound();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>

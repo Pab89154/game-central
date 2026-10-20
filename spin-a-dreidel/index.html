@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spin a Dreidel — Game Central</title>
+<link rel="icon" type="image/png" sizes="256x256" href="../favicon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=ios18" />
+<link rel="stylesheet" href="../shared.css" />
+<style>
+  .dreidel{width:150px;height:150px;margin:0 auto;border-radius:22px;background:linear-gradient(145deg,#2b8fff,#7a3cff);display:flex;align-items:center;justify-content:center;font-size:5rem;font-weight:900;color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.4);position:relative}
+  .dreidel::after{content:"";position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:14px;height:26px;border-radius:6px;background:#ffd94d}
+  .dreidel.spinning{animation:spin .18s linear infinite}
+  @keyframes spin{0%{transform:rotate(-7deg) scale(1)}50%{transform:rotate(7deg) scale(1.06)}100%{transform:rotate(-7deg) scale(1)}}
+  .score-bar{display:flex;gap:1.25rem;flex-wrap:wrap;justify-content:center;font-weight:600;color:var(--text-muted)}
+  .score-bar span{color:var(--neon-blue)}
+  .rules{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;width:min(100%,420px)}
+  .rule{background:var(--surface-hover);border-radius:var(--radius);padding:.6rem;text-align:center;font-weight:700}
+  .hint{color:var(--text-muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="app"><main class="main">
+<a class="back-link" href="../index.html">← Back to Arcade</a>
+<header class="header"><div class="game-card-icon" aria-hidden="true">🌀</div><h1>Spin a Dreidel</h1><p class="tagline">Spin, win coins, and empty the pot!</p></header>
+<div class="game-panel">
+  <div class="score-bar"><div>Your coins: <span id="coins">10</span> 🪙</div><div>Pot: <span id="pot">0</span> 🪙</div><div>Spins: <span id="spins">0</span></div></div>
+  <p class="status" id="status">Tap Spin! First to 25 coins wins.</p>
+  <div class="dreidel" id="dreidel" aria-label="Dreidel">ג</div>
+  <button class="btn" type="button" id="spinBtn">Spin!</button>
+  <div class="rules">
+    <div class="rule">ג Gimel — win the whole pot!</div>
+    <div class="rule">ה Hey — win half the pot</div>
+    <div class="rule">נ Nun — nothing happens</div>
+    <div class="rule">ש Shin — put 1 coin in the pot</div>
+  </div>
+  <button class="btn btn-secondary" type="button" id="newBtn">New game</button>
+  <p class="hint">A classic spinning-top game. When the pot is empty, you add 1 coin to start it again.</p>
+</div>
+</main></div>
+<script>
+var SIDES=[{he:"נ",name:"Nun",text:"Nun — nothing happens."},{he:"ג",name:"Gimel",text:"Gimel! You win the whole pot!"},{he:"ה",name:"Hey",text:"Hey! You win half the pot."},{he:"ש",name:"Shin",text:"Shin — put 1 coin in the pot."}];
+var coins=10,pot=0,spins=0,spinning=false,over=false;
+var dreidel=document.getElementById("dreidel"),statusEl=document.getElementById("status");
+function updateHud(){document.getElementById("coins").textContent=coins;document.getElementById("pot").textContent=pot;document.getElementById("spins").textContent=spins;}
+function newGame(){coins=10;pot=0;spins=0;over=false;dreidel.textContent="ג";statusEl.textContent="Tap Spin! First to 25 coins wins.";updateHud();}
+function finish(){over=true;if(coins>=25)statusEl.textContent="🏆 You reached 25 coins in "+spins+" spins! You win!";else statusEl.textContent="Out of coins! Tap New game to play again.";}
+function spin(){
+ if(spinning||over)return;
+ if(pot===0){if(coins<=0){finish();return;}coins--;pot++;statusEl.textContent="You put 1 coin in the pot. Spinning…";}
+ spinning=true;dreidel.classList.add("spinning");
+ var ticks=0;var iv=setInterval(function(){dreidel.textContent=SIDES[Math.floor(Math.random()*4)].he;ticks++;if(ticks>9){clearInterval(iv);land();}},90);
+ function land(){
+   spinning=false;dreidel.classList.remove("spinning");spins++;
+   var side=SIDES[Math.floor(Math.random()*4)];dreidel.textContent=side.he;
+   if(side.name==="Gimel"){coins+=pot;pot=0;}
+   else if(side.name==="Hey"){var win=Math.ceil(pot/2);coins+=win;pot-=win;}
+   else if(side.name==="Shin"){if(coins>0){coins--;pot++;} }
+   statusEl.textContent=side.text+" You have "+coins+" coins.";
+   updateHud();
+   if(coins>=25||coins<=0&&pot<=0)finish(); else if(coins<=0){statusEl.textContent=side.text+" You're out of coins!";finish();}
+ }
+ updateHud();
+}
+document.getElementById("spinBtn").addEventListener("click",spin);
+document.getElementById("newBtn").addEventListener("click",newGame);
+updateHud();
+</script>
+<script src="../shared.js"></script>
+</body>
+</html>
